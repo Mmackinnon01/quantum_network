@@ -7,6 +7,7 @@ from quantum_network.dynamics_manager import (
 import math
 import numpy as np
 import tqdm
+import multiprocessing
 
 
 class System:
@@ -75,7 +76,7 @@ class SingleSystem(System):
     def getDynamics(self):
         return self.dynamics
 
-    def updateDyanamics(self):
+    def updateDynamics(self):
         for dynamicFunc in self.getDynamics():
             dynamicFunc.updateOperators([0], self.dim)
 
@@ -192,16 +193,23 @@ class CompositeSystem(System):
 
         return dynamics
 
-    def updateDyanamics(self):
+    def updateDynamics(self):
         self.dynamics_manager.dynamic_funcs = []
-        for dynamicFunc in tqdm.tqdm(self.getDynamics()):
-            systems = dynamicFunc.systems
-            indices = []
-            for system in systems:
-                indices += self.subsystemIndex(system)
-            config, dims = self.generateConfiguration(indices)
-            dynamicFunc.updateOperators(config, dims)
+
+        with multiprocessing.Pool() as p:
+            funcs = p.map(self.updateDynamic, tqdm.tqdm(self.getDynamics()))
+
+        for dynamicFunc in funcs:
             self.dynamics_manager.addDynamics(dynamicFunc)
+
+    def updateDynamic(self, dynamic):
+        systems = dynamic.systems
+        indices = []
+        for system in systems:
+            indices += self.subsystemIndex(system)
+        config, dims = self.generateConfiguration(indices)
+        dynamic.updateOperators(config, dims)
+        return dynamic
 
     def generateConfiguration(self, indices):
         dims = self.configuration

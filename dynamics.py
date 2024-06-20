@@ -109,7 +109,8 @@ class QuditExchangeDynamics(AnalyticDynamicsFunc):
             dim, dim
         ).astype("complex")
         h = np.matmul(h, np.conjugate(h.T))
-        self.hamiltonian = coupling_strength * (Operator(h))
+        h = Operator(h).normalise()
+        self.hamiltonian = coupling_strength * (h)
         self.operators = [self.hamiltonian]
 
     def calcDerivative(self, init_state: DensityMatrix) -> DensityMatrix:
