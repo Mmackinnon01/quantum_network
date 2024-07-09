@@ -8,14 +8,19 @@ import math
 import numpy as np
 import tqdm
 import multiprocessing
+import copy
 
 
 class System:
 
-    def __init__(self):
+    def __init__(self, logger=False):
         self.dynamics = []
         self.name = None
         self.dynamics_manager = AnalyticDynamicsManager(0.001)
+        if logger:
+            self.logger = StateLogger()
+        else:
+            self.logger = None
 
     @property
     def state(self):
@@ -24,6 +29,9 @@ class System:
     @state.setter
     def state(self, ro: DensityMatrix):
         self.__state = ro
+
+        if self.logger is not None:
+            self.logger.record(copy.deepcopy(ro))
 
     @property
     def configuration(self):
@@ -41,8 +49,8 @@ class System:
 
 class SingleSystem(System):
 
-    def __init__(self, state):
-        super().__init__()
+    def __init__(self, state, logger=False):
+        super().__init__(logger)
         self.state = state
         self.nsystems = 1
 
@@ -83,8 +91,8 @@ class SingleSystem(System):
 
 class CompositeSystem(System):
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, logger=False):
+        super().__init__(logger)
         self.subsystems = []
         self.nsystems = 0
         self.__state = DensityMatrix(matrix=np.array([[1]]))
@@ -236,3 +244,12 @@ class CompositeSystem(System):
 
     def measureSubsystem(self, subsystem, measurement):
         return self.getSubsystemState(subsystem).measure(measurement)
+    
+
+class StateLogger:
+
+    def __init__(self):
+        self.log = []
+
+    def record(self, state):
+        self.log.append(state)

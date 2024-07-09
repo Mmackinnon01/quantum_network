@@ -1,5 +1,5 @@
-from .system import System
 import numpy as np
+import copy
 from quantum.core import (
     DensityMatrix,
     Operator,
@@ -22,7 +22,7 @@ class DynamicsFunc:
 
     def updateOperators(self, config, dims):
         for operator in self.operators:
-            operator.transform(config, dims)
+            operator.transform(copy.deepcopy(config), copy.deepcopy(dims))
 
 
 class AnalyticDynamicsFunc(DynamicsFunc):
@@ -36,7 +36,7 @@ class DerivativeDynamicsFunc(DynamicsFunc):
 
 
 class EnergyExchangeDynamics(AnalyticDynamicsFunc):
-    def __init__(self, system1: System, system2: System, coupling_strength: float):
+    def __init__(self, system1, system2, coupling_strength: float):
         super().__init__()
         self.system1 = system1
         self.system2 = system2
@@ -52,8 +52,38 @@ class EnergyExchangeDynamics(AnalyticDynamicsFunc):
         return ro_dot
 
 
+class DampedCascadeFunction(DerivativeDynamicsFunc):
+    def __init__(self, system1, system2, gamma_1, gamma_2):
+        self.system1 = system1
+        self.system2 = system2
+        self.systems = [self.system1, self.system2]
+        self.gamma_1 = gamma_1
+        self.gamma_2 = gamma_2
+        self.sigma_plus_1 = sigmaPlus.tensor(Operator(np.eye(2)))
+        self.sigma_plus_2 = Operator(np.eye(2)).tensor(sigmaPlus)
+        self.sigma_minus_1 = sigmaMinus.tensor(Operator(np.eye(2)))
+        self.sigma_minus_2 = Operator(np.eye(2)).tensor(sigmaPlus)
+        self.operators = [self.sigma_plus_1, self.sigma_plus_2, self.sigma_minus_1, self.sigma_minus_2]
+
+    def calcDerivative(self, ro: DensityMatrix):
+
+        term1 = (self.gamma_1) * (
+            2 * self.sigma_minus_1 * ro * self.sigma_plus_1
+            - ro * self.sigma_plus_1 * self.sigma_minus_1
+            - self.sigma_plus_1 * self.sigma_minus_1 * ro
+        )
+        term2 = 0.1 * (self.gamma_2) * (
+            2 * self.sigma_minus_2 * ro * self.sigma_plus_2
+            - ro * self.sigma_plus_2 * self.sigma_minus_2
+            - self.sigma_plus_2 * self.sigma_minus_2 * ro
+        )
+        term3 = - ((self.gamma_1 * self.gamma_2) ** 0.5) * self.sigma_plus_2.commutator(self.sigma_minus_1 * ro)
+        term4 = - ((self.gamma_1 * self.gamma_2) ** 0.5) * (ro * self.sigma_plus_1).commutator(self.sigma_minus_2)
+        return term1 + term2 + term3 + term4
+
+
 class QutritQubitExchangeDynamics(AnalyticDynamicsFunc):
-    def __init__(self, system1: System, system2: System, coupling_strength: float):
+    def __init__(self, system1, system2, coupling_strength: float):
         super().__init__()
         self.system1 = system1
         self.system2 = system2
@@ -72,8 +102,8 @@ class QutritQubitExchangeDynamics(AnalyticDynamicsFunc):
 class LevelCouplingDynamics(AnalyticDynamicsFunc):
     def __init__(
         self,
-        system1: System,
-        system2: System,
+        system1,
+        system2,
         coupling_levels_sys_1: list,
         coupling_levels_sys_2: list,
         coupling_strength: float,
@@ -98,7 +128,7 @@ class LevelCouplingDynamics(AnalyticDynamicsFunc):
 
 
 class QuditExchangeDynamics(AnalyticDynamicsFunc):
-    def __init__(self, system1: System, system2: System, coupling_strength: float):
+    def __init__(self, system1, system2, coupling_strength: float):
         super().__init__()
         self.system1 = system1
         self.system2 = system2
@@ -109,7 +139,7 @@ class QuditExchangeDynamics(AnalyticDynamicsFunc):
             dim, dim
         ).astype("complex")
         h = np.matmul(h, np.conjugate(h.T))
-        h = Operator(h).normalise()
+        h = Operator(h)
         self.hamiltonian = coupling_strength * (h)
         self.operators = [self.hamiltonian]
 
@@ -119,7 +149,7 @@ class QuditExchangeDynamics(AnalyticDynamicsFunc):
 
 
 class QuditEnergyDynamics(AnalyticDynamicsFunc):
-    def __init__(self, system: System, eigen_values=None):
+    def __init__(self, system, eigen_values=None):
         super().__init__()
         self.system = system
         self.systems = [self.system]
@@ -138,3 +168,5 @@ class QuditEnergyDynamics(AnalyticDynamicsFunc):
     def calcDerivative(self, init_state: DensityMatrix) -> DensityMatrix:
         ro_dot = -1j * self.hamiltonian.commutator(init_state)
         return ro_dot
+    
+

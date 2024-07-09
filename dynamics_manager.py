@@ -1,5 +1,6 @@
 from quantum.core import DensityMatrix, Operator
 from quantum_network.runge_kutta import rungeKutta
+from quantum_network.dynamics import AnalyticDynamicsFunc, DerivativeDynamicsFunc
 
 import numpy as np
 import scipy
@@ -45,12 +46,33 @@ class NumericalDynamicsManager(DynamicsManager):
             total_time += self.timestep
         return state
 
+    def precompute_u(self, t):
+        self.time = t
+
     def computeDerivative(self, state):
         derivative = 0
+
+        if self.H != 0:
+            derivative = -1j * self.H.commutator(state)
+
         for func in self.dynamic_funcs:
-            derivative += func.calcDerivative(state)
+            if type(func).__base__ == DerivativeDynamicsFunc:
+                derivative += func.calcDerivative(state)
 
         return derivative
+    
+    def evolve(self, state: DensityMatrix):
+        total_time = 0
+
+        self.H = 0
+        for func in self.dynamic_funcs:
+            if type(func).__base__ == AnalyticDynamicsFunc:
+                self.H += func.hamiltonian
+
+        while total_time < self.time:
+            state = rungeKutta(self.computeDerivative, self.timestep, state)
+            total_time += self.timestep
+        return state
 
 
 class ReducedNumericalDynamicsManager(DynamicsManager):
