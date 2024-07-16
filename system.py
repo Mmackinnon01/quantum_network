@@ -13,10 +13,14 @@ import copy
 
 class System:
 
-    def __init__(self, logger=False):
+    def __init__(self, logger=False, numerical=True):
         self.dynamics = []
         self.name = None
-        self.dynamics_manager = AnalyticDynamicsManager(0.001)
+        self.t = 0
+        if numerical:
+            self.dynamics_manager = NumericalDynamicsManager()
+        else:
+            self.dynamics_manager = AnalyticDynamicsManager()
         if logger:
             self.logger = StateLogger()
         else:
@@ -31,7 +35,7 @@ class System:
         self.__state = ro
 
         if self.logger is not None:
-            self.logger.record(copy.deepcopy(ro))
+            self.logger.record(self.t, copy.deepcopy(ro))
 
     @property
     def configuration(self):
@@ -49,8 +53,8 @@ class System:
 
 class SingleSystem(System):
 
-    def __init__(self, state, logger=False):
-        super().__init__(logger)
+    def __init__(self, state=None, logger=False, numerical=True):
+        super().__init__(logger, numerical)
         self.state = state
         self.nsystems = 1
 
@@ -67,6 +71,9 @@ class SingleSystem(System):
             self.__dim = ro.dim
         self.__state = ro
 
+        if self.logger is not None:
+            self.logger.record(self.t, copy.deepcopy(ro))
+
     def computeState(self):
         return self.state
 
@@ -76,6 +83,10 @@ class SingleSystem(System):
     @property
     def dim(self):
         return self.__dim
+    
+    @dim.setter
+    def dim(self, dim):
+        self.__dim = dim
 
     @property
     def configuration(self):
@@ -91,8 +102,8 @@ class SingleSystem(System):
 
 class CompositeSystem(System):
 
-    def __init__(self, logger=False):
-        super().__init__(logger)
+    def __init__(self, logger=False, numerical=True):
+        super().__init__(logger, numerical)
         self.subsystems = []
         self.nsystems = 0
         self.__state = DensityMatrix(matrix=np.array([[1]]))
@@ -123,11 +134,16 @@ class CompositeSystem(System):
             ro.configuration = self.configuration
         self.__state = ro
 
+        if self.logger is not None:
+            self.logger.record(self.t, copy.deepcopy(ro))
+
     def computeState(self):
         if self.state:
             return self.state
         else:
             states = [system.computeState() for system in self.subsystems]
+            if any(val is None for val in states):
+                return None
             state = states[0]
             for s in states[1:]:
                 state = state.tensor(s)
@@ -228,12 +244,18 @@ class CompositeSystem(System):
 
         return config, dims
 
-    def evolve(self):
-        self.state = self.dynamics_manager.evolve(self.state)
+    def evolve(self, time):
+        t0 = self.t
+        while self.t < t0 + time:
+            self.state = self.dynamics_manager.evolve(self.state)
+            self.t += self.dynamics_manager.timestep
 
-    def getSubsystemState(self, subsystem):
+    def getSubsystemState(self, subsystem, time=-1):
         system_indices = self.subsystemIndex(subsystem)
-        subsystem_state = self.state
+        if time==-1 or time == self.t:
+            subsystem_state = self.state
+        else:
+            subsystem_state = self.logger.log[time]
         config = self.configuration
         for i in reversed(range(self.nsystems)):
             if i not in system_indices:
@@ -249,7 +271,8 @@ class CompositeSystem(System):
 class StateLogger:
 
     def __init__(self):
-        self.log = []
+        self.log = {}
 
-    def record(self, state):
-        self.log.append(state)
+    def record(self, time, state):
+        if state:
+            self.log[round(time,6)] = state

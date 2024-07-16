@@ -7,8 +7,7 @@ import scipy
 
 
 class DynamicsManager:
-    def __init__(self, timestep):
-        self.timestep = timestep
+    def __init__(self):
         self.dynamic_funcs = []
 
     def addDynamics(self, dynamics):
@@ -30,24 +29,31 @@ class AnalyticDynamicsManager(DynamicsManager):
         u_t = Operator(scipy.linalg.expm(-1j * H.matrix * time))
         return u_t
 
-    def precompute_u(self, time):
+    def setTimestep(self, time):
         self.u_t = self.u(time)
         self.u_t_dagger = self.u_t.hermConj()
+        self.timestep = time
 
     def evolve(self, state: DensityMatrix):
         return self.u_t * state * self.u_t_dagger
 
 
 class NumericalDynamicsManager(DynamicsManager):
-    def evolve(self, state: DensityMatrix, time: float):
-        total_time = 0
-        while total_time < time:
-            state = rungeKutta(self.computeDerivative, self.timestep, state)
-            total_time += self.timestep
-        return state
+    def evolve(self, state: DensityMatrix):
+        return rungeKutta(self.computeDerivative, self.timestep, state)
 
-    def precompute_u(self, t):
-        self.time = t
+    def addDynamics(self, dynamics):
+        super().addDynamics(dynamics)
+        self.computeH()
+
+    def computeH(self):
+        self.H = 0
+        for dynamic in self.dynamic_funcs:
+            if type(dynamic).__base__ == AnalyticDynamicsFunc:
+                self.H += dynamic.hamiltonian
+
+    def setTimestep(self, t):
+        self.timestep = t
 
     def computeDerivative(self, state):
         derivative = 0
@@ -60,33 +66,3 @@ class NumericalDynamicsManager(DynamicsManager):
                 derivative += func.calcDerivative(state)
 
         return derivative
-    
-    def evolve(self, state: DensityMatrix):
-        total_time = 0
-
-        self.H = 0
-        for func in self.dynamic_funcs:
-            if type(func).__base__ == AnalyticDynamicsFunc:
-                self.H += func.hamiltonian
-
-        while total_time < self.time:
-            state = rungeKutta(self.computeDerivative, self.timestep, state)
-            total_time += self.timestep
-        return state
-
-
-class ReducedNumericalDynamicsManager(DynamicsManager):
-    def evolve(self, state: DensityMatrix, time: float):
-        total_time = 0
-
-        self.H = 0
-        for dynamic in self.dynamic_funcs:
-            self.H += dynamic.hamiltonian
-
-        while total_time < time:
-            state = rungeKutta(self.computeDerivative, self.timestep, state)
-            total_time += self.timestep
-        return state
-
-    def computeDerivative(self, state):
-        return -1j * self.H.commutator(state)
