@@ -1,8 +1,5 @@
 from quantum.core import DensityMatrix
-from quantum_network.dynamics_manager import (
-    NumericalDynamicsManager,
-    AnalyticDynamicsManager,
-)
+from quantum_network.dynamics_manager import DynamicsManager
 
 import math
 import numpy as np
@@ -17,10 +14,7 @@ class System:
         self.dynamics = []
         self.name = None
         self.t = 0
-        if numerical:
-            self.dynamics_manager = NumericalDynamicsManager()
-        else:
-            self.dynamics_manager = AnalyticDynamicsManager()
+        self.dynamics_manager = DynamicsManager()
         if logger:
             self.logger = StateLogger()
         else:
@@ -249,6 +243,8 @@ class CompositeSystem(System):
         while self.t < t0 + time:
             self.state = self.dynamics_manager.evolve(self.state)
             self.t += self.dynamics_manager.timestep
+            if not self.state.isLegitamate():
+                print(f'Illegitimate state at t={self.t}')
 
     def getSubsystemState(self, subsystem, time=-1):
         system_indices = self.subsystemIndex(subsystem)
