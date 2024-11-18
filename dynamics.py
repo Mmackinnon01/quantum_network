@@ -63,10 +63,12 @@ class LocalDecoherenceDynamics(NonUnitaryDynamics):
         self.operators = [self.sigma_minus, self.sigma_plus]
 
     def calcDerivative(self, ro: DensityMatrix):
+        sig_minus_ro = self.sigma_minus * ro
+        sig_plus_minus_ro = self.sigma_plus * sig_minus_ro
         return self.gamma * (
-            2 * self.sigma_minus * ro * self.sigma_plus
-            - ro * self.sigma_plus * self.sigma_minus
-            - self.sigma_plus * self.sigma_minus * ro
+            2 * sig_minus_ro * self.sigma_plus
+            - sig_plus_minus_ro.hermConj()
+            - sig_plus_minus_ro
         )
 
 
@@ -82,7 +84,12 @@ class DampedCascadeFunction(NonUnitaryDynamics):
         self.sigma_plus_2 = Operator(np.eye(2)).tensor(sigmaPlus)
         self.sigma_minus_1 = sigmaMinus.tensor(Operator(np.eye(2)))
         self.sigma_minus_2 = Operator(np.eye(2)).tensor(sigmaPlus)
-        self.operators = [self.sigma_plus_1, self.sigma_plus_2, self.sigma_minus_1, self.sigma_minus_2]
+        self.operators = [
+            self.sigma_plus_1,
+            self.sigma_plus_2,
+            self.sigma_minus_1,
+            self.sigma_minus_2,
+        ]
 
     def calcDerivative(self, ro: DensityMatrix):
 
@@ -91,13 +98,21 @@ class DampedCascadeFunction(NonUnitaryDynamics):
             - ro * self.sigma_plus_1 * self.sigma_minus_1
             - self.sigma_plus_1 * self.sigma_minus_1 * ro
         )
-        term2 = 0.1 * (self.gamma_2) * (
-            2 * self.sigma_minus_2 * ro * self.sigma_plus_2
-            - ro * self.sigma_plus_2 * self.sigma_minus_2
-            - self.sigma_plus_2 * self.sigma_minus_2 * ro
+        term2 = (
+            0.1
+            * (self.gamma_2)
+            * (
+                2 * self.sigma_minus_2 * ro * self.sigma_plus_2
+                - ro * self.sigma_plus_2 * self.sigma_minus_2
+                - self.sigma_plus_2 * self.sigma_minus_2 * ro
+            )
         )
-        term3 = - ((self.gamma_1 * self.gamma_2) ** 0.5) * self.sigma_plus_2.commutator(self.sigma_minus_1 * ro)
-        term4 = - ((self.gamma_1 * self.gamma_2) ** 0.5) * (ro * self.sigma_plus_1).commutator(self.sigma_minus_2)
+        term3 = -((self.gamma_1 * self.gamma_2) ** 0.5) * self.sigma_plus_2.commutator(
+            self.sigma_minus_1 * ro
+        )
+        term4 = -((self.gamma_1 * self.gamma_2) ** 0.5) * (
+            ro * self.sigma_plus_1
+        ).commutator(self.sigma_minus_2)
         return term1 + term2 + term3 + term4
 
 

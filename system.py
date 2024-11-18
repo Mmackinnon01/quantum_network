@@ -77,7 +77,7 @@ class SingleSystem(System):
     @property
     def dim(self):
         return self.__dim
-    
+
     @dim.setter
     def dim(self, dim):
         self.__dim = dim
@@ -243,12 +243,12 @@ class CompositeSystem(System):
         while self.t < t0 + time:
             self.state = self.dynamics_manager.evolve(self.state)
             self.t += self.dynamics_manager.timestep
-            if not self.state.isLegitamate():
-                print(f'Illegitimate state at t={self.t}')
+        if not self.state.isLegitamate():
+            print(f"Illegitimate state")
 
     def getSubsystemState(self, subsystem, time=-1):
         system_indices = self.subsystemIndex(subsystem)
-        if time==-1 or time == self.t:
+        if time == -1 or time == self.t:
             subsystem_state = self.state
         else:
             subsystem_state = self.logger.log[time]
@@ -262,7 +262,7 @@ class CompositeSystem(System):
 
     def measureSubsystem(self, subsystem, measurement):
         return self.getSubsystemState(subsystem).measure(measurement)
-    
+
 
 class StateLogger:
 
@@ -271,4 +271,4 @@ class StateLogger:
 
     def record(self, time, state):
         if state:
-            self.log[round(time,6)] = state
+            self.log[round(time, 6)] = state
